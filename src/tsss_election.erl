@@ -142,7 +142,7 @@ follower(cast, {election, FromNode, TermId}, Data) ->
 follower(cast, {cluster_event, {node_joined, _Node}}, Data) ->
     %% Update known nodes list
     KnownNodes = application:get_env(tsss, known_nodes, []),
-    AllNodes   = lists:usort([node() | nodes() | KnownNodes]),
+    AllNodes   = lists:usort([node()] ++ nodes() ++ KnownNodes),
     {keep_state, Data#data{all_nodes = AllNodes}};
 
 follower(cast, {cluster_event, {node_left, Node}}, #data{leader_node = Node} = Data) ->
