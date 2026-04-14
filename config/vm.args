@@ -1,0 +1,28 @@
+## Node name (override per node)
+-name tsss@127.0.0.1
+
+## Cluster cookie
+-setcookie tsss_secret_cookie
+
+## SMP
+-smp enable
++S 4:4
+
+## Async threads
++A 32
+
+## Max processes
++P 1048576
+
+## Kernel poll
++K true
+
+## Dist buffer (64MB)
++zdbbl 65536
+
+## Manual connection control - kill switch relies on this
+-kernel dist_auto_connect never
+
+## Distribution port range
+-kernel inet_dist_listen_min 9100
+-kernel inet_dist_listen_max 9200
