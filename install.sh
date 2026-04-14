@@ -390,13 +390,28 @@ BANNER
             read -rp "  Shared cookie [$_default_cookie]: " _my_cookie
             _my_cookie="${_my_cookie:-$_default_cookie}"
 
-            local _hostname
-            _hostname=$(hostname -s 2>/dev/null || echo "chat")
-            local _my_node="chat-${_hostname}@${_my_ip}"
-            echo "  Your node name will be: $_my_node"
+            # ── Pick a name for the node (privacy-safe, no hostname) ──────────
+            local _words=(fox hawk lynx wolf bear rook pike wren crow ibis kite vole mink puma kudu)
+            local _suggested_name="${_words[RANDOM % ${#_words[@]}]}$((RANDOM % 90 + 10))"
             echo ""
-            echo "  Enter peer IPs or node names (one per line, blank line when done)."
-            echo "  Tip: a bare IP like 1.2.3.4 becomes chat-peer@1.2.3.4 automatically."
+            echo "  Choose a name for yourself — this is the part before @ in your node name."
+            echo "  Keep it short and memorable. It is shared with peers but not tied to your machine."
+            local _my_name
+            read -rp "  Your name [$_suggested_name]: " _my_name
+            _my_name="${_my_name:-$_suggested_name}"
+            # Sanitise: lowercase, letters/digits/hyphens only, no leading/trailing hyphens
+            _my_name=$(printf '%s' "$_my_name" \
+                | tr '[:upper:]' '[:lower:]' \
+                | tr -cs 'a-z0-9-' '-' \
+                | sed 's/^-*//;s/-*$//')
+            [[ -z "$_my_name" ]] && _my_name="$_suggested_name"
+
+            local _my_node="${_my_name}@${_my_ip}"
+            echo "  Your node name: $_my_node"
+            echo ""
+            echo "  Enter your peers' full node names (e.g. wolf42@5.6.7.8)."
+            echo "  Your peers see their own node name at the end of setup — ask them to share it."
+            echo "  Leave blank when done."
             echo ""
 
             local _peer_nodes=()
@@ -404,8 +419,18 @@ BANNER
                 local _peer_input
                 read -rp "  Peer: " _peer_input
                 [[ -z "$_peer_input" ]] && break
+                # Bare IP entered: remind user the full name is needed, offer a fallback
                 if [[ "$_peer_input" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                    _peer_input="chat-peer@${_peer_input}"
+                    echo "  Note: a full node name (name@ip) is needed to connect."
+                    local _peer_name
+                    read -rp "  Their name before @ [peer]: " _peer_name
+                    _peer_name="${_peer_name:-peer}"
+                    _peer_name=$(printf '%s' "$_peer_name" \
+                        | tr '[:upper:]' '[:lower:]' \
+                        | tr -cs 'a-z0-9-' '-' \
+                        | sed 's/^-*//;s/-*$//')
+                    [[ -z "$_peer_name" ]] && _peer_name="peer"
+                    _peer_input="${_peer_name}@${_peer_input}"
                 fi
                 _peer_nodes+=("$_peer_input")
             done
@@ -428,9 +453,9 @@ BANNER
 
             echo ""
             echo "  ── Share this with your peers ───────────────────────────────"
-            printf '  Cookie : %s\n' "$_my_cookie"
-            printf '  Node   : %s\n' "$_my_node"
-            echo "  (They need the same cookie to connect to your node.)"
+            printf '  Cookie    : %s\n' "$_my_cookie"
+            printf '  Your node : %s\n' "$_my_node"
+            echo "  (Peers need the cookie AND your node name to connect.)"
             echo "  ─────────────────────────────────────────────────────────────"
             echo ""
         }
