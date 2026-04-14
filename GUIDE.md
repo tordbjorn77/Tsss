@@ -2,6 +2,10 @@
 
 This guide walks you through sending encrypted private messages between two computers over the internet using Tsss. No accounts, no usernames, no data stored on any server.
 
+**Recommended for most users:** install, then run `./tsss chat`. A short wizard collects your IP and a shared secret, and you're chatting with end-to-end encryption in under two minutes. Jump to [The chat command](#the-chat-command--easiest-way) to get started.
+
+The later sections cover the [manual Erlang shell approach](#manual-setup--erlang-shell) for those who want full control or are building on top of Tsss.
+
 ---
 
 ## What you need
@@ -76,6 +80,110 @@ hostname -I | awk '{print $1}'
 ```
 
 Share your IP with the other person (via text, Signal, email — any channel works).
+
+---
+
+## The chat command — easiest way
+
+`./tsss chat` is an interactive chat client that handles everything for you: node startup, key exchange, and messaging — no Erlang shell required.
+
+### First run — setup wizard
+
+The first time you run it, a short wizard walks you through configuration:
+
+```
+$ cd ~/.tsss/src
+$ ./tsss chat
+
+  ── Tsss Chat Setup ──────────────────────────────────────────
+  No config found. Let's get you set up — takes about a minute.
+
+  Detecting your public IP... found: 93.184.216.34
+  Your public IP [93.184.216.34]: ↵
+
+  Shared cookie [a3f9c12e4b7d8e1f]: ↵
+
+  Choose a name for yourself — this is the part before @ in your node name.
+  Keep it short and memorable. It is shared with peers but not tied to your machine.
+  Your name [hawk42]: ↵
+  Your node name: hawk42@93.184.216.34
+
+  Enter your peers' full node names (e.g. wolf42@5.6.7.8).
+  Your peers see their own node name at the end of setup — ask them to share it.
+  Leave blank when done.
+
+  Peer: wolf15@198.51.100.7 ↵
+  Peer: ↵
+
+  ── Share this with your peers ───────────────────────────────
+  Cookie    : a3f9c12e4b7d8e1f
+  Your node : hawk42@93.184.216.34
+  (Peers need the cookie AND your node name to connect.)
+  ─────────────────────────────────────────────────────────────
+```
+
+The wizard saves your settings to `~/.tsss/client.cfg` and starts the node immediately.
+
+**What to share with your peers:** Send them your **cookie** and **node name** over any out-of-band channel (Signal, email, etc.) before you both run `./tsss chat`. They need both to connect.
+
+### What happens next
+
+Once both nodes are running and keys have been exchanged automatically, you'll see the chat banner and a prompt:
+
+```
+  +------------------------------------------+
+  |  Tsss Encrypted Chat                     |
+  |  Handle : hawk-7f3a                      |
+  |  Peers  : 1 key-exchanged and ready      |
+  +------------------------------------------+
+  Type /help for commands. Typing sends to all ready peers.
+
+You>
+```
+
+Your session handle (like `hawk-7f3a`) is randomly generated each time — it is not your node name and has no relation to your machine.
+
+Type anything and press Enter to send to all connected peers. Their messages appear automatically between your prompts.
+
+### Chat commands
+
+| Command | What it does |
+|---|---|
+| `<text>` | Send message to all key-exchanged peers |
+| `/to <handle> <text>` | Send to one specific peer by their session handle |
+| `/peers` | List connected peers and their key-exchange status |
+| `/help` | Show command list |
+| `/quit` or `/q` | Wipe session and exit |
+| `/wipe` | Destroy session keys immediately and exit |
+
+### Subsequent runs
+
+After the first setup, `./tsss chat` loads your saved config and starts instantly — no wizard.
+
+### Reset configuration
+
+To wipe your saved config and run the wizard again from scratch:
+
+```bash
+./tsss chat --reset
+```
+
+This is useful if you want to change your node name, cookie, or peer list.
+
+### How key exchange works
+
+When both nodes are online, the chat client automatically:
+1. Connects to your configured peer nodes
+2. Discovers their session handles via the cluster registry
+3. Exchanges encryption keys — no manual copying of public keys needed
+
+If a peer isn't online yet when you start, the client checks every 5 seconds and exchanges keys as soon as they appear.
+
+---
+
+## Manual setup — Erlang shell
+
+The steps below describe the same process using the raw Erlang shell. This gives you full control and is useful for scripting, debugging, or using features not exposed by the chat client.
 
 ---
 
@@ -309,6 +417,20 @@ tsss_api:list_handles().
 
 ## Quick reference
 
+### Chat client
+
+| What you want to do | Command |
+|---|---|
+| First-time setup and start chat | `./tsss chat` |
+| Start chat (config already saved) | `./tsss chat` |
+| Reconfigure from scratch | `./tsss chat --reset` |
+| Send to all peers | type your message and press Enter |
+| Send to one peer | `/to <handle> <message>` |
+| List peers | `/peers` |
+| Exit and wipe session | `/quit` |
+
+### Erlang shell
+
 | What you want to do | Command |
 |---|---|
 | Create a session | `{ok, #{pid := Pid, handle := H, pub_key := K}} = tsss_api:new_session(#{client => self()}).` |
@@ -330,6 +452,32 @@ tsss_api:list_handles().
 ---
 
 ## Troubleshooting
+
+**`./tsss chat` says "Could not parse client.cfg"**
+
+- Your config file at `~/.tsss/client.cfg` may be malformed. Run `./tsss chat --reset` to delete it and go through the wizard again.
+
+**Peer doesn't appear after both nodes are running**
+
+- Make sure both sides used the **same cookie**. The cookie is checked by Erlang's distribution layer before any connection is made.
+- Check that the node name the peer entered matches exactly what you shared — including the part before `@`. Node names are case-sensitive.
+- Verify ports 9100–9200 are open on both machines (see [Firewall setup](#firewall-setup)).
+
+**`/peers` shows no peers or all peers as "key-pending"**
+
+- The peer may not have started their chat session yet, so their handle isn't registered. Give it a moment — the client re-checks every 5 seconds.
+- If a peer shows "key-pending" for more than 30 seconds, they may have restarted their session. Their new handle will be discovered automatically.
+
+**Messages I send don't arrive on the other side**
+
+- Check `/peers` — you can only send to peers shown as `ready`. If your peer shows `key-pending`, wait for automatic key exchange to complete.
+- If no peers appear at all, check the node connection (see above).
+
+**`./tsss chat --reset` deleted my config but I want to keep the cookie**
+
+- The cookie is just a shared password. You can reuse any cookie — type it manually when the wizard asks instead of pressing Enter for a new one.
+
+---
 
 **`tsss_cluster:members()` only shows my node**
 

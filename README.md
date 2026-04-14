@@ -26,9 +26,24 @@ The script:
 
 ## Quick start
 
+### For most users — encrypted chat between two machines
+
 ```bash
-cd Tsss
-./tsss demo          # interactive demo — send and receive a message
+cd ~/.tsss/src
+./tsss chat
+```
+
+The first time you run it, a short wizard asks for your public IP, a shared secret cookie, and your peers' node names. It saves the config and launches the chat session automatically. On subsequent runs it starts immediately.
+
+Both machines run `./tsss chat`. The wizard prints a **cookie** and a **node name** at the end — share those with your peer before starting.
+
+See [GUIDE.md](GUIDE.md) for a full walkthrough.
+
+### For developers and local testing
+
+```bash
+cd ~/.tsss/src
+./tsss demo          # interactive demo — send and receive a message in one shell
 ./tsss console       # full Erlang shell with the app loaded
 ./tsss cluster 3     # spin up 3 local nodes for distributed testing
 ```
@@ -41,6 +56,7 @@ cd Tsss
 Usage: tsss <command> [options]
 
 Commands:
+  chat [--reset]    Start the encrypted chat client (setup wizard on first run)
   start             Start a Tsss node in the background
   stop              Stop the running node
   console           Start a node with an interactive Erlang shell
