@@ -1,0 +1,39 @@
+{application, tsss, [
+    {description, "Tsss: Distributed anonymous encrypted messaging"},
+    {vsn, "0.1.0"},
+    {registered, [
+        tsss_sup,
+        tsss_cluster_sup,
+        tsss_node_mon,
+        tsss_cluster,
+        tsss_election_sup,
+        tsss_election,
+        tsss_leader,
+        tsss_registry_sup,
+        tsss_registry,
+        tsss_presence,
+        tsss_destruct_sup,
+        tsss_ttl_server,
+        tsss_wipe,
+        tsss_router_sup,
+        tsss_router,
+        tsss_session_sup,
+        tsss_client_sup
+    ]},
+    {applications, [kernel, stdlib, crypto, sasl]},
+    {mod, {tsss_app, []}},
+    {env, [
+        {registry_pg_scope, tsss_registry},
+        {known_nodes, []},
+        {node_connect_retry_ms, 2000},
+        {node_connect_max_retries, 10},
+        {election_timeout_ms, 5000},
+        {election_heartbeat_ms, 2000},
+        {default_session_ttl_ms, 0},
+        {default_message_ttl_ms, 300000},
+        {max_message_size_bytes, 65536},
+        {mailbox_max_depth, 1000},
+        {ecdh_curve, x25519},
+        {presence_ttl_ms, 30000}
+    ]}
+]}.

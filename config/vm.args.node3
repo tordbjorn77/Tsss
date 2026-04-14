@@ -1,0 +1,9 @@
+-name tsss@node3.local
+-setcookie tsss_secret_cookie
+-smp enable
++S 4:4
++A 32
++P 1048576
+-kernel dist_auto_connect never
+-kernel inet_dist_listen_min 9121
+-kernel inet_dist_listen_max 9130
