@@ -242,6 +242,7 @@ Commands:
   status            Check if the node is running
   demo              Run a guided interactive demo (no extra setup needed)
   cluster <N>       Start N local nodes on this machine (default: 3)
+  chat [--reset]    Start the encrypted chat client (setup wizard on first run)
   help              Show this help
 
 Options (for start / console):
@@ -333,6 +334,174 @@ BANNER
         wait
         ;;
 
+    chat)
+        TSSS_RESET=false
+        for _arg in "$@"; do
+            [[ "$_arg" == "--reset" ]] && TSSS_RESET=true
+        done
+
+        TSSS_CFG_DIR="$HOME/.tsss"
+        TSSS_CFG="$TSSS_CFG_DIR/client.cfg"
+
+        # ── IP detection ────────────────────────────────────────────────────
+        _detect_ip() {
+            local _ip
+            for _svc in "https://api.ipify.org" "https://ifconfig.me/ip" "https://icanhazip.com"; do
+                _ip=$(curl -fsSL --connect-timeout 4 "$_svc" 2>/dev/null | tr -d '[:space:]')
+                [[ "$_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && { echo "$_ip"; return 0; }
+            done
+            echo ""
+        }
+
+        # ── Setup wizard ─────────────────────────────────────────────────────
+        _run_setup() {
+            echo ""
+            echo "  ── Tsss Chat Setup ──────────────────────────────────────────"
+            if [[ "$TSSS_RESET" == "true" ]]; then
+                echo "  (--reset: reconfiguring from scratch)"
+            else
+                echo "  No config found. Let's get you set up — takes about a minute."
+            fi
+            echo ""
+
+            echo -n "  Detecting your public IP... "
+            local _detected_ip
+            _detected_ip=$(_detect_ip)
+            if [[ -n "$_detected_ip" ]]; then
+                echo "found: $_detected_ip"
+            else
+                echo "could not detect automatically."
+            fi
+
+            local _my_ip
+            read -rp "  Your public IP [$_detected_ip]: " _my_ip
+            _my_ip="${_my_ip:-$_detected_ip}"
+            if [[ -z "$_my_ip" ]]; then
+                echo "  ERROR: An IP address is required." >&2
+                exit 1
+            fi
+
+            local _default_cookie
+            _default_cookie=$(openssl rand -hex 8 2>/dev/null \
+                || dd if=/dev/urandom bs=1 count=16 2>/dev/null \
+                   | tr -dc 'A-Za-z0-9' | head -c 16)
+
+            local _my_cookie
+            read -rp "  Shared cookie [$_default_cookie]: " _my_cookie
+            _my_cookie="${_my_cookie:-$_default_cookie}"
+
+            local _hostname
+            _hostname=$(hostname -s 2>/dev/null || echo "chat")
+            local _my_node="chat-${_hostname}@${_my_ip}"
+            echo "  Your node name will be: $_my_node"
+            echo ""
+            echo "  Enter peer IPs or node names (one per line, blank line when done)."
+            echo "  Tip: a bare IP like 1.2.3.4 becomes chat-peer@1.2.3.4 automatically."
+            echo ""
+
+            local _peer_nodes=()
+            while true; do
+                local _peer_input
+                read -rp "  Peer: " _peer_input
+                [[ -z "$_peer_input" ]] && break
+                if [[ "$_peer_input" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    _peer_input="chat-peer@${_peer_input}"
+                fi
+                _peer_nodes+=("$_peer_input")
+            done
+
+            mkdir -p "$TSSS_CFG_DIR"
+            {
+                printf '#{\n'
+                printf '  node_name  => "%s",\n' "$_my_node"
+                printf '  cookie     => "%s",\n' "$_my_cookie"
+                printf '  peer_nodes => ['
+                local _i=0
+                for _p in "${_peer_nodes[@]}"; do
+                    ((_i > 0)) && printf ','
+                    printf '"%s"' "$_p"
+                    ((_i++)) || true
+                done
+                printf ']\n}.\n'
+            } > "$TSSS_CFG"
+            chmod 600 "$TSSS_CFG"
+
+            echo ""
+            echo "  ── Share this with your peers ───────────────────────────────"
+            printf '  Cookie : %s\n' "$_my_cookie"
+            printf '  Node   : %s\n' "$_my_node"
+            echo "  (They need the same cookie to connect to your node.)"
+            echo "  ─────────────────────────────────────────────────────────────"
+            echo ""
+        }
+
+        # ── Reset: delete config ──────────────────────────────────────────────
+        if [[ "$TSSS_RESET" == "true" && -f "$TSSS_CFG" ]]; then
+            rm -f "$TSSS_CFG"
+            echo "  Existing config deleted."
+        fi
+
+        # ── First-time run: wizard ────────────────────────────────────────────
+        if [[ ! -f "$TSSS_CFG" ]]; then
+            _run_setup
+        fi
+
+        # ── Parse config ─────────────────────────────────────────────────────
+        _cfg_out=$(erl -noshell -eval "
+            case file:consult(\"$TSSS_CFG\") of
+                {ok, [C]} ->
+                    N  = maps:get(node_name, C, \"\"),
+                    K  = maps:get(cookie, C, \"\"),
+                    Ps = maps:get(peer_nodes, C, []),
+                    io:format(\"~s~n~s~n~s~n\",
+                        [N, K, string:join(Ps, \" \")]);
+                _ ->
+                    io:format(\"ERROR~nERROR~nERROR~n\")
+            end,
+            halt().
+        " 2>/dev/null) || { echo "  ERROR: Failed to parse $TSSS_CFG" >&2; exit 1; }
+
+        TSSS_NODE=$(echo "$_cfg_out" | sed -n '1p')
+        TSSS_COOKIE=$(echo "$_cfg_out" | sed -n '2p')
+        TSSS_PEERS_STR=$(echo "$_cfg_out" | sed -n '3p')
+
+        if [[ "$TSSS_NODE" == "ERROR" || -z "$TSSS_NODE" ]]; then
+            echo "  ERROR: node_name missing from $TSSS_CFG" >&2
+            echo "  Run './tsss chat --reset' to reconfigure." >&2
+            exit 1
+        fi
+        if [[ -z "$TSSS_COOKIE" ]]; then
+            echo "  ERROR: cookie missing from $TSSS_CFG" >&2
+            exit 1
+        fi
+
+        # ── Build Erlang atom list for peer nodes ─────────────────────────────
+        TSSS_PEER_LIST="["
+        _first=1
+        for _p in $TSSS_PEERS_STR; do
+            [[ $_first -eq 1 ]] && TSSS_PEER_LIST+="'$_p'" || TSSS_PEER_LIST+=",'$_p'"
+            _first=0
+        done
+        TSSS_PEER_LIST+="]"
+
+        echo "  Starting Tsss chat node: $TSSS_NODE"
+        echo "  (Type /help for commands, /quit to exit)"
+        echo ""
+
+        # ── Launch Erlang node ────────────────────────────────────────────────
+        exec erl \
+            -name "$TSSS_NODE" \
+            -setcookie "$TSSS_COOKIE" \
+            -kernel dist_auto_connect never \
+            -kernel inet_dist_listen_min 9100 \
+            -kernel inet_dist_listen_max 9200 \
+            -pa "$SCRIPT_DIR/_build/default/lib/tsss/ebin" \
+            -pa $EBIN_GLOB \
+            -noshell \
+            -config "$SCRIPT_DIR/config/sys" \
+            -eval "application:ensure_all_started(tsss), tsss_chat:start(${TSSS_PEER_LIST})."
+        ;;
+
     help|--help|-h)
         usage
         ;;
@@ -362,6 +531,7 @@ print_success() {
     echo -e "  ${BOLD}Quick start:${NC}"
     echo ""
     echo -e "    cd $wrapper_dir"
+    echo -e "    ./tsss chat          ${BLUE}# start encrypted chat (setup wizard on first run)${NC}"
     echo -e "    ./tsss demo          ${BLUE}# guided demo${NC}"
     echo -e "    ./tsss console       ${BLUE}# interactive Erlang shell${NC}"
     echo -e "    ./tsss cluster 3     ${BLUE}# 3-node local cluster${NC}"
