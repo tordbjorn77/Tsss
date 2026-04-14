@@ -132,7 +132,7 @@ recv(SessionPid) ->
 
 %% Blocking receive: wait up to TimeoutMs for a message notification.
 -spec recv_blocking(pid(), pos_integer()) -> {ok, #envelope{}} | timeout.
-recv_blocking(SessionPid, TimeoutMs) ->
+recv_blocking(_SessionPid, TimeoutMs) ->
     receive
         {tsss_event, {message, _From, _Plaintext} = Msg} ->
             {ok, Msg}
