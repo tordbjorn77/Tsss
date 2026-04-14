@@ -7,7 +7,7 @@
 start(_StartType, _StartArgs) ->
     %% Start the pg scope before any process tries to join groups.
     %% pg must exist before the registry supervisor starts.
-    Scope = application:get_env(tsss, registry_pg_scope, tsss_registry),
+    Scope = application:get_env(tsss, registry_pg_scope, tsss_pg),
     pg:start(Scope),
     tsss_sup:start_link().
 

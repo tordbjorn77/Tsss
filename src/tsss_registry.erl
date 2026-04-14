@@ -59,7 +59,7 @@ lookup(Handle) ->
 %% Return all currently registered handles cluster-wide.
 -spec all_handles() -> [handle()].
 all_handles() ->
-    Scope = application:get_env(tsss, registry_pg_scope, tsss_registry),
+    Scope = application:get_env(tsss, registry_pg_scope, tsss_pg),
     pg:which_groups(Scope).
 
 %% ===================================================================
@@ -67,7 +67,7 @@ all_handles() ->
 %% ===================================================================
 
 init([]) ->
-    Scope = application:get_env(tsss, registry_pg_scope, tsss_registry),
+    Scope = application:get_env(tsss, registry_pg_scope, tsss_pg),
     ets:new(?CACHE_TAB, [
         set, public, named_table,
         {keypos, #reg_entry.handle},
@@ -114,7 +114,7 @@ terminate(_Reason, _State) ->
 %% ===================================================================
 
 lookup_remote(Handle) ->
-    Scope = application:get_env(tsss, registry_pg_scope, tsss_registry),
+    Scope = application:get_env(tsss, registry_pg_scope, tsss_pg),
     case pg:get_members(Scope, Handle) of
         [] ->
             {error, not_found};

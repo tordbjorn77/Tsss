@@ -23,7 +23,7 @@
     {applications, [kernel, stdlib, crypto, sasl]},
     {mod, {tsss_app, []}},
     {env, [
-        {registry_pg_scope, tsss_registry},
+        {registry_pg_scope, tsss_pg},
         {known_nodes, []},
         {node_connect_retry_ms, 2000},
         {node_connect_max_retries, 10},

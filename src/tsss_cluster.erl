@@ -71,7 +71,7 @@ is_leader() ->
 %% ===================================================================
 
 init([]) ->
-    Scope = application:get_env(tsss, registry_pg_scope, tsss_registry),
+    Scope = application:get_env(tsss, registry_pg_scope, tsss_pg),
     %% Register this node in the cluster members group
     pg:join(Scope, ?CLUSTER_GROUP, self()),
     Members = #{node() => #{joined_at => erlang:system_time(millisecond), status => up}},
